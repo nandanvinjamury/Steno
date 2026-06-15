@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Local Video Transcriber</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+  <div class="max-w-7xl mx-auto px-4 py-8">
+    <header class="mb-8">
+      <h1 class="text-3xl font-bold tracking-tight">Local Video Transcriber</h1>
+      <p class="text-slate-400 mt-1">
+        Runs entirely on your machine — no API keys, no cloud. Powered by faster-whisper.
+      </p>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- LEFT PANEL -->
+      <section class="space-y-4">
+        <!-- Drop zone -->
+        <div
+          id="dropzone"
+          class="border-2 border-dashed border-slate-600 rounded-xl p-10 text-center cursor-pointer transition hover:border-sky-500 hover:bg-slate-800/50"
+        >
+          <svg class="mx-auto h-12 w-12 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+          </svg>
+          <p class="mt-3 text-slate-300">
+            <span class="font-semibold text-sky-400">Click to browse</span> or drag &amp; drop
+          </p>
+          <p class="text-xs text-slate-500 mt-1">Any video or audio file</p>
+          <input id="fileInput" type="file" accept="video/*,audio/*" class="hidden" />
+        </div>
+
+        <!-- Selected file -->
+        <div id="fileInfo" class="hidden bg-slate-800 rounded-lg p-4">
+          <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <p id="fileName" class="font-medium truncate"></p>
+              <p id="fileSize" class="text-sm text-slate-400"></p>
+            </div>
+            <button id="clearBtn" class="text-slate-400 hover:text-slate-200 text-sm shrink-0">Remove</button>
+          </div>
+        </div>
+
+        <button
+          id="transcribeBtn"
+          disabled
+          class="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition"
+        >
+          Transcribe
+        </button>
+
+        <!-- Progress -->
+        <div id="progress" class="hidden bg-slate-800 rounded-lg p-4 space-y-3">
+          <div class="flex items-center gap-3">
+            <div id="spinner" class="hidden h-4 w-4 border-2 border-sky-400 border-t-transparent rounded-full animate-spin"></div>
+            <p id="status" class="text-sm text-slate-300">Idle</p>
+          </div>
+          <div class="text-xs text-slate-500">Live preview</div>
+          <div
+            id="preview"
+            class="text-sm text-slate-300 max-h-48 overflow-y-auto whitespace-pre-wrap bg-slate-900 rounded p-3 leading-relaxed"
+          ></div>
+        </div>
+
+        <!-- Error -->
+        <div id="error" class="hidden bg-red-900/40 border border-red-700 text-red-200 rounded-lg p-4 text-sm"></div>
+      </section>
+
+      <!-- RIGHT PANEL -->
+      <section class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold">Transcript</h2>
+          <span id="wordCount" class="text-sm text-slate-400">0 words</span>
+        </div>
+
+        <textarea
+          id="transcript"
+          class="w-full h-[28rem] bg-slate-800 border border-slate-700 rounded-lg p-4 text-sm leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
+          placeholder="Your transcript will appear here, live, as it is generated…"
+        ></textarea>
+
+        <div class="flex gap-3">
+          <button
+            id="copyBtn"
+            disabled
+            class="flex-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed py-2 rounded-lg text-sm font-medium transition"
+          >
+            Copy
+          </button>
+          <button
+            id="downloadBtn"
+            disabled
+            class="flex-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed py-2 rounded-lg text-sm font-medium transition"
+          >
+            Download .txt
+          </button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const dropzone = $("dropzone");
+    const fileInput = $("fileInput");
+    const fileInfo = $("fileInfo");
+    const fileNameEl = $("fileName");
+    const fileSizeEl = $("fileSize");
+    const clearBtn = $("clearBtn");
+    const transcribeBtn = $("transcribeBtn");
+    const progress = $("progress");
+    const spinner = $("spinner");
+    const statusEl = $("status");
+    const preview = $("preview");
+    const errorEl = $("error");
+    const transcriptEl = $("transcript");
+    const wordCountEl = $("wordCount");
+    const copyBtn = $("copyBtn");
+    const downloadBtn = $("downloadBtn");
+
+    let selectedFile = null;
+
+    function fmtSize(bytes) {
+      const units = ["B", "KB", "MB", "GB"];
+      let i = 0;
+      let n = bytes;
+      while (n >= 1024 && i < units.length - 1) {
+        n /= 1024;
+        i++;
+      }
+      return `${n.toFixed(1)} ${units[i]}`;
+    }
+
+    function updateWordCount() {
+      const text = transcriptEl.value.trim();
+      const count = text ? text.split(/\s+/).length : 0;
+      wordCountEl.textContent = `${count.toLocaleString()} word${count === 1 ? "" : "s"}`;
+    }
+
+    function setFile(file) {
+      selectedFile = file;
+      fileNameEl.textContent = file.name;
+      fileSizeEl.textContent = fmtSize(file.size);
+      fileInfo.classList.remove("hidden");
+      transcribeBtn.disabled = false;
+      hideError();
+    }
+
+    function clearFile() {
+      selectedFile = null;
+      fileInput.value = "";
+      fileInfo.classList.add("hidden");
+      transcribeBtn.disabled = true;
+    }
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.remove("hidden");
+    }
+    function hideError() {
+      errorEl.classList.add("hidden");
+      errorEl.textContent = "";
+    }
+
+    // ---- File selection: click + drag/drop ----
+    dropzone.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => {
+      if (e.target.files.length) setFile(e.target.files[0]);
+    });
+
+    ["dragenter", "dragover"].forEach((evt) =>
+      dropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dropzone.classList.add("border-sky-500", "bg-slate-800/50");
+      })
+    );
+    ["dragleave", "drop"].forEach((evt) =>
+      dropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dropzone.classList.remove("border-sky-500", "bg-slate-800/50");
+      })
+    );
+    dropzone.addEventListener("drop", (e) => {
+      if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+    });
+
+    clearBtn.addEventListener("click", clearFile);
+
+    // ---- Transcription ----
+    transcribeBtn.addEventListener("click", startTranscription);
+
+    function setBusy(busy) {
+      transcribeBtn.disabled = busy || !selectedFile;
+      transcribeBtn.textContent = busy ? "Transcribing…" : "Transcribe";
+      spinner.classList.toggle("hidden", !busy);
+    }
+
+    async function startTranscription() {
+      if (!selectedFile) return;
+      hideError();
+      setBusy(true);
+
+      // Reset output.
+      transcriptEl.value = "";
+      preview.textContent = "";
+      progress.classList.remove("hidden");
+      statusEl.textContent = "Uploading…";
+      copyBtn.disabled = true;
+      downloadBtn.disabled = true;
+      updateWordCount();
+
+      // 1. Upload (streamed by the browser; no client timeout).
+      let jobId;
+      try {
+        const fd = new FormData();
+        fd.append("file", selectedFile);
+        const res = await fetch("/upload", { method: "POST", body: fd });
+        if (!res.ok) {
+          const detail = await res.json().catch(() => ({}));
+          throw new Error(detail.detail || `Upload failed (${res.status})`);
+        }
+        jobId = (await res.json()).job_id;
+      } catch (err) {
+        showError(`Upload failed: ${err.message}`);
+        statusEl.textContent = "Failed";
+        setBusy(false);
+        return;
+      }
+
+      // 2. Open SSE stream for live segments.
+      const es = new EventSource(`/transcribe/${jobId}`);
+
+      es.onmessage = (e) => {
+        let data;
+        try {
+          data = JSON.parse(e.data);
+        } catch {
+          return;
+        }
+
+        if (data.type === "status") {
+          statusEl.textContent = data.message;
+        } else if (data.type === "segment") {
+          // Append live as each segment arrives.
+          transcriptEl.value += data.text;
+          transcriptEl.scrollTop = transcriptEl.scrollHeight;
+          preview.textContent += data.text;
+          preview.scrollTop = preview.scrollHeight;
+          updateWordCount();
+        } else if (data.type === "done") {
+          // Final authoritative transcript.
+          transcriptEl.value = data.transcript;
+          updateWordCount();
+          statusEl.textContent = "Done ✓";
+          copyBtn.disabled = !data.transcript;
+          downloadBtn.disabled = !data.transcript;
+          setBusy(false);
+          es.close();
+        } else if (data.type === "error") {
+          showError(data.message);
+          statusEl.textContent = "Failed";
+          setBusy(false);
+          es.close();
+        }
+      };
+
+      es.onerror = () => {
+        // Only treat as fatal if we are still mid-stream.
+        if (!transcribeBtn.disabled) return;
+        showError("Connection to the server was lost during transcription.");
+        statusEl.textContent = "Failed";
+        setBusy(false);
+        es.close();
+      };
+    }
+
+    // ---- Copy / Download ----
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(transcriptEl.value);
+        const orig = copyBtn.textContent;
+        copyBtn.textContent = "Copied!";
+        setTimeout(() => (copyBtn.textContent = orig), 1500);
+      } catch {
+        showError("Could not copy to clipboard.");
+      }
+    });
+
+    downloadBtn.addEventListener("click", () => {
+      const base = selectedFile
+        ? selectedFile.name.replace(/\.[^/.]+$/, "")
+        : "transcript";
+      const blob = new Blob([transcriptEl.value], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${base}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    // Keep word count in sync if the user edits the transcript.
+    transcriptEl.addEventListener("input", updateWordCount);
+  </script>
+</body>
+</html>
