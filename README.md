@@ -1,6 +1,6 @@
 # 🎙️ Steno
 
-Video-to-script stenographer: a local, offline video and audio transcription web app. No API keys, no cloud, nothing leaves your machine, free to run.
+Video-to-script stenographer: a local, offline video and audio transcription web app. No API keys, no cloud, nothing leaves your machine, and free to run.
 
 Upload a 500 MB video and the transcript streams into your browser as the model produces it.
 
@@ -20,7 +20,7 @@ Uploads are read in 1 MB chunks and written straight to a temp file on disk, so 
 
 Before recognition, `ffmpeg` reduces a 500 MB video to roughly 50 MB of 16 kHz mono WAV. The model runs `int8`-quantized for usable CPU speed, with voice-activity detection to skip silence. Temp files are removed in a `finally` block whether the run succeeds or fails. Missing `ffmpeg`, corrupt or unsupported files, and model-load failures each return a specific message to the UI rather than a stack trace.
 
-The streaming was tested end to end against a running server, not just compiled: a spoken video was pushed through, and per-event timestamps showed segments arriving incrementally, with later segments landing seconds after earlier ones.
+The streaming was tested end to end against a running server: a spoken video was pushed through, and per-event timestamps showed segments arriving incrementally, with later segments landing seconds after earlier ones.
 
 ## 🧰 Tech Stack
 
@@ -32,7 +32,7 @@ The streaming was tested end to end against a running server, not just compiled:
 | Streaming | Server-Sent Events | Native browser `EventSource` for one-way live updates |
 | Frontend | Vanilla JS + Tailwind (CDN) | No build step, single `index.html` |
 
-No databases, no message brokers, no external services. The system is three Python files and one HTML file.
+There are no databases, no message brokers, and no external services. The system is very straightforward with three Python files and one static HTML file.
 
 ## 🎬 Demo
 
@@ -45,12 +45,12 @@ No databases, no message brokers, no external services. The system is three Pyth
 |  +-----------------------+  |  +-----------------------+  |
 |  |   Click or drag here  |  |  | Your transcript       |  |
 |  +-----------------------+  |  | appears here, live,   |  |
-|                            |  | as it is generated.   |  |
-|  interview.mp4   487 MB    |  |                       |  |
-|  [    Transcribe    ]      |  +-----------------------+  |
-|  Transcribing...           |                             |
-|  Live preview:             |  [   Copy   ] [ Download ]  |
-|  "Hello there, today we"   |                             |
+|                             |  | as it is generated.   |  |
+|  interview.mp4   487 MB     |  |                       |  |
+|  [    Transcribe    ]       |  +-----------------------+  |
+|  Transcribing...            |                             |
+|  Live preview:              |  [   Copy   ] [ Download ]  |
+|  "Hello there, today we"    |                             |
 +-----------------------------+-----------------------------+
 ```
 
