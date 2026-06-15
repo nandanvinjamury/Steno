@@ -118,6 +118,7 @@ The first run downloads the Whisper `medium` model (~1.5 GB) and caches it durin
 ```
 Steno/
 +-- README.md
++-- LICENSE.md
 +-- transcriber/
     +-- main.py            # FastAPI: serves UI, streams uploads, streams SSE
     +-- transcribe.py      # ffmpeg + faster-whisper pipeline (worker thread, queue)
@@ -149,4 +150,4 @@ In rough priority order:
 
 ## 📄 License
 
-MIT.
+MIT. See [LICENSE.md](LICENSE.md).
